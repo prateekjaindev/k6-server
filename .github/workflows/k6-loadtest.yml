@@ -1,0 +1,36 @@
+name: Run Load Test
+on:
+  workflow_dispatch:
+    inputs:
+      script_name:
+        description: "Choose the load test script"
+        required: true
+        type: choice
+        default: "project_a.js"
+        options:
+          - project_a.js
+          - project_b.js
+          - project_c.js
+          - project_d.js
+jobs:
+  run-load-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Run k6 script on EC2 via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            mkdir -p ~/k6-loadtests
+            rm -f ~/k6-loadtests/${{ github.event.inputs.script_name }}
+            cat <<EOF > ~/k6-loadtests/${{ github.event.inputs.script_name }}
+            $(<k6-scripts/${{ github.event.inputs.script_name }})
+            EOF
+            export K6_PROMETHEUS_RW_SERVER_URL=${{ secrets.K6_PROMETHEUS_URL }}
+            export K6_PROMETHEUS_RW_USERNAME=${{ secrets.K6_PROMETHEUS_ID }}
+            export K6_PROMETHEUS_RW_PASSWORD=${{ secrets.K6_PROMETHEUS_KEY }}
+            k6 run --out=experimental-prometheus-rw ~/k6-loadtests/${{ github.event.inputs.script_name }}
