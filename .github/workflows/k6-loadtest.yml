@@ -30,14 +30,17 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
       
-      - name: Copy test script to EC2
-        uses: appleboy/scp-action@v0.1.7
+      - name: Ensure directory exists and copy test script
+        uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: k6-scripts/${{ github.event.inputs.script_name }}
-          target: /home/ubuntu/k6-loadtests/
+          script: |
+            mkdir -p /home/ubuntu/k6-loadtests
+            cat > /home/ubuntu/k6-loadtests/${{ github.event.inputs.script_name }} << 'EOL'
+            $(cat k6-scripts/${{ github.event.inputs.script_name }} | sed 's/\/\\\/g')
+            EOL
 
       - name: Run k6 test
         uses: appleboy/ssh-action@v0.1.10
