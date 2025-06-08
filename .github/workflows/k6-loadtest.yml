@@ -1,6 +1,12 @@
+# Workflow for running distributed k6 load tests
+# This workflow copies test scripts to an EC2 instance and executes them
+# with the specified parameters, sending metrics to Prometheus
+
 name: Run Load Test
+
+# Define when and how this workflow runs
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
     inputs:
       script_name:
         description: "Choose the load test script"
@@ -8,8 +14,8 @@ on:
         type: choice
         default: "project_a.js"
         options:
-          - project_a.js
-          - project_b.js
+          - project_a.js  # Basic website load test
+          - project_b.js  # Website navigation test
       vu_count:
         description: "Number of virtual users"
         required: false
@@ -23,21 +29,28 @@ on:
 
 jobs:
   run-load-test:
-    runs-on: ubuntu-latest
+    name: Run Load Test on EC2
+    runs-on: ubuntu-latest  # GitHub-hosted runner
+    
     steps:
-      - name: Checkout repo
+      # Step 1: Checkout the repository to access test scripts
+      - name: Checkout repository
         uses: actions/checkout@v3
       
+      # Step 2: Transfer the selected test script to EC2
+      # Uses SCP for secure file transfer
       - name: Copy test script to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: k6-scripts/${{ github.event.inputs.script_name }}
-          target: /home/ubuntu/k6-loadtests/
-          strip_components: 1
+          host: ${{ secrets.EC2_HOST }}  # EC2 instance hostname/IP
+          username: ubuntu                # Default Ubuntu username
+          key: ${{ secrets.EC2_SSH_KEY }} # SSH private key for authentication
+          source: k6-scripts/${{ github.event.inputs.script_name }}  # Source file in repo
+          target: /home/ubuntu/k6-loadtests/  # Destination directory on EC2
+          strip_components: 1  # Removes parent directory from source path
           
+      # Step 3: Verify the script was transferred correctly
+      # This helps with debugging any file transfer issues
       - name: Verify script transfer
         uses: appleboy/ssh-action@v0.1.10
         with:
@@ -45,34 +58,42 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Verifying script exists..."
+            echo "Verifying script exists and is accessible..."
             ls -la /home/ubuntu/k6-loadtests/${{ github.event.inputs.script_name }}
             echo -e "\nFirst 5 lines of the script:"
             head -n 5 /home/ubuntu/k6-loadtests/${{ github.event.inputs.script_name }} || true
 
-      - name: Run k6 test
+      # Step 4: Execute the k6 load test on the EC2 instance
+      # This runs the actual load test with the specified parameters
+      - name: Run k6 load test
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Set Prometheus environment variables
+            # Configure Prometheus remote write for metrics collection
+            # These environment variables are used by k6's Prometheus output
             export K6_PROMETHEUS_RW_SERVER_URL="${{ secrets.K6_PROMETHEUS_URL }}"
             export K6_PROMETHEUS_RW_USERNAME="${{ secrets.K6_PROMETHEUS_ID }}"
             export K6_PROMETHEUS_RW_PASSWORD="${{ secrets.K6_PROMETHEUS_KEY }}"
             
-            # Create directory if it doesn't exist
+            # Ensure the target directory exists
             mkdir -p ~/k6-loadtests
             
-            # Run the test
-            echo "Starting load test with ${{ github.event.inputs.vu_count }} VUs for ${{ github.event.inputs.duration }}"
+            # Navigate to the test directory
             cd ~/k6-loadtests
             
-            # Make sure the script is executable
-            chmod +x ${{ github.event.inputs.script_name }}
+            # Make the script executable (in case permissions were lost in transfer)
+            chmod +x ./${{ github.event.inputs.script_name }}
             
-            # Run k6 with the full path to the script
+            # Display test parameters
+            echo "Starting load test with ${{ github.event.inputs.vu_count }} VUs for ${{ github.event.inputs.duration }}"
+            
+            # Execute k6 with the specified parameters
+            # --vus: Number of virtual users
+            # --duration: Test duration
+            # --out: Output destinations (JSON file and Prometheus)
             k6 run \
               --vus ${{ github.event.inputs.vu_count || 10 }} \
               --duration ${{ github.event.inputs.duration || '1m' }} \
@@ -80,4 +101,5 @@ jobs:
               --out experimental-prometheus-rw \
               ./${{ github.event.inputs.script_name }}
             
-            echo "Load test completed"
+            # Confirm test completion
+            echo "Load test completed successfully"
