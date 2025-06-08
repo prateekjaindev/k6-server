@@ -10,8 +10,6 @@ on:
         options:
           - project_a.js
           - project_b.js
-          - project_c.js
-          - project_d.js
       vu_count:
         description: "Number of virtual users"
         required: false
