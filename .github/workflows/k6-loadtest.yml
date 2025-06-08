@@ -57,11 +57,16 @@ jobs:
             # Run the test
             echo "Starting load test with ${{ github.event.inputs.vu_count }} VUs for ${{ github.event.inputs.duration }}"
             cd ~/k6-loadtests
+            
+            # Make sure the script is executable
+            chmod +x ${{ github.event.inputs.script_name }}
+            
+            # Run k6 with the full path to the script
             k6 run \
               --vus ${{ github.event.inputs.vu_count || 10 }} \
               --duration ${{ github.event.inputs.duration || '1m' }} \
               --out json=test_results_$(date +%Y%m%d_%H%M%S).json \
               --out experimental-prometheus-rw \
-              ${{ github.event.inputs.script_name }}
+              ./${{ github.event.inputs.script_name }}
             
             echo "Load test completed"
