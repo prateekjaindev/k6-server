@@ -61,7 +61,7 @@ jobs:
               --vus ${{ github.event.inputs.vu_count || 10 }} \
               --duration ${{ github.event.inputs.duration || '1m' }} \
               --out json=test_results_$(date +%Y%m%d_%H%M%S).json \
-              --out prometheus \
+              --out experimental-prometheus-rw \
               ${{ github.event.inputs.script_name }}
             
             echo "Load test completed"
