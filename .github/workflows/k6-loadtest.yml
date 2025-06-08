@@ -30,26 +30,29 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
       
-      - name: Update and run k6 test
+      - name: Copy test script to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: k6-scripts/${{ github.event.inputs.script_name }}
+          target: /home/ubuntu/k6-loadtests/
+
+      - name: Run k6 test
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Ensure directory exists
-            mkdir -p ~/k6-loadtests
-            
-            # Update test script
-            echo "Updating test script: ${{ github.event.inputs.script_name }}"
-            cat > ~/k6-loadtests/${{ github.event.inputs.script_name }} << 'EOL'
-            $(cat k6-scripts/${{ github.event.inputs.script_name }} | sed 's/\/\\\/g')
-            EOL
-            
             # Set Prometheus environment variables
             export K6_PROMETHEUS_RW_SERVER_URL="${{ secrets.K6_PROMETHEUS_URL }}"
             export K6_PROMETHEUS_RW_USERNAME="${{ secrets.K6_PROMETHEUS_ID }}"
             export K6_PROMETHEUS_RW_PASSWORD="${{ secrets.K6_PROMETHEUS_KEY }}"
+            
+            # Create directory if it doesn't exist
+            mkdir -p ~/k6-loadtests
             
             # Run the test
             echo "Starting load test with ${{ github.event.inputs.vu_count }} VUs for ${{ github.event.inputs.duration }}"
