@@ -12,25 +12,53 @@ on:
           - project_b.js
           - project_c.js
           - project_d.js
+      vu_count:
+        description: "Number of virtual users"
+        required: false
+        type: number
+        default: 10
+      duration:
+        description: "Test duration (e.g., 30s, 1m, 5m)"
+        required: false
+        type: string
+        default: "1m"
+
 jobs:
   run-load-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-      - name: Run k6 script on EC2 via SSH
+      
+      - name: Update and run k6 test
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            # Ensure directory exists
             mkdir -p ~/k6-loadtests
-            rm -f ~/k6-loadtests/${{ github.event.inputs.script_name }}
-            cat <<EOF > ~/k6-loadtests/${{ github.event.inputs.script_name }}
-            $(<k6-scripts/${{ github.event.inputs.script_name }})
-            EOF
-            export K6_PROMETHEUS_RW_SERVER_URL=${{ secrets.K6_PROMETHEUS_URL }}
-            export K6_PROMETHEUS_RW_USERNAME=${{ secrets.K6_PROMETHEUS_ID }}
-            export K6_PROMETHEUS_RW_PASSWORD=${{ secrets.K6_PROMETHEUS_KEY }}
-            k6 run --out=experimental-prometheus-rw ~/k6-loadtests/${{ github.event.inputs.script_name }}
+            
+            # Update test script
+            echo "Updating test script: ${{ github.event.inputs.script_name }}"
+            cat > ~/k6-loadtests/${{ github.event.inputs.script_name }} << 'EOL'
+            $(cat k6-scripts/${{ github.event.inputs.script_name }} | sed 's/\/\\\/g')
+            EOL
+            
+            # Set Prometheus environment variables
+            export K6_PROMETHEUS_RW_SERVER_URL="${{ secrets.K6_PROMETHEUS_URL }}"
+            export K6_PROMETHEUS_RW_USERNAME="${{ secrets.K6_PROMETHEUS_ID }}"
+            export K6_PROMETHEUS_RW_PASSWORD="${{ secrets.K6_PROMETHEUS_KEY }}"
+            
+            # Run the test
+            echo "Starting load test with ${{ github.event.inputs.vu_count }} VUs for ${{ github.event.inputs.duration }}"
+            cd ~/k6-loadtests
+            k6 run \
+              --vus ${{ github.event.inputs.vu_count || 10 }} \
+              --duration ${{ github.event.inputs.duration || '1m' }} \
+              --out json=test_results_$(date +%Y%m%d_%H%M%S).json \
+              --out prometheus \
+              ${{ github.event.inputs.script_name }}
+            
+            echo "Load test completed"
