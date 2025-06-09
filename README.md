@@ -49,6 +49,32 @@ This repository contains load testing scripts and workflows for running distribu
   - `K6_PROMETHEUS_ID`: Prometheus username (if required)
   - `K6_PROMETHEUS_PASSWORD`: Prometheus password (if required)
 
+### Installation on EC2
+
+To install k6 on an EC2 instance (Ubuntu/Debian), run the following commands:
+
+```bash
+# Update package lists
+sudo apt update && sudo apt install -y gnupg software-properties-common
+
+# Add the k6 repository key
+curl -s https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+
+# Add the k6 repository
+echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+
+# Update package lists again
+sudo apt update
+
+# Install k6
+sudo apt install k6
+```
+
+Verify the installation by checking the k6 version:
+```bash
+k6 version
+```
+
 ### Running Tests
 1. Navigate to the "Actions" tab in your GitHub repository
 2. Select "Run Load Test" workflow
